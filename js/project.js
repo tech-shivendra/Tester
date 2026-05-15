@@ -88,7 +88,7 @@ async function deleteProject() {
       }
     }
     await deleteDoc(doc(db, "projects", id));
-    location.href = "/home.html";
+    location.href = "home.html";
   } catch (err) {
     alert("Error deleting project: " + err.message);
   }
@@ -161,7 +161,7 @@ function prettyStorageError(err) {
 }
 
 function openModal() {
-  if (!currentUser) { location.href = "/login.html"; return; }
+  if (!currentUser) { location.href = "login.html"; return; }
   const m = document.getElementById("modal-root");
   m.innerHTML = `
     <div class="modal-overlay" id="overlay">

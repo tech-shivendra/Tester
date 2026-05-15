@@ -12,7 +12,7 @@ async function loadProjects() {
         <div class="empty" style="grid-column:1/-1">
           <h3>No projects yet</h3>
           <p>Be the first to post one — go on, the leaderboard is empty.</p>
-          <a href="/submit.html" class="btn btn-primary" style="margin-top:24px">Post a Project</a>
+          <a href="submit.html" class="btn btn-primary" style="margin-top:24px">Post a Project</a>
         </div>`;
       return;
     }
