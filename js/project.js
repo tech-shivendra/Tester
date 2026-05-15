@@ -1,13 +1,13 @@
 import {
   auth, db, doc, getDoc, addDoc, collection, getDocs, query, where,
-  orderBy, updateDoc, serverTimestamp, increment, onAuthStateChanged, deleteDoc,
+  orderBy, updateDoc, serverTimestamp, increment, onAuthStateChanged, deleteDoc, writeBatch,
   storage, ref, uploadBytes, getDownloadURL
 } from "./firebase-config.js";
 import { renderHeader, initials, timeAgo } from "./shared.js";
 
 renderHeader();
 
-const id = new URLSearchParams(location.search).get("id");
+const id = new URLSearchParams(location.search).get("id") || location.hash.substring(1);
 if (!id) { document.getElementById("project-root").innerHTML = `<div class="empty"><h3>Missing project id</h3></div>`; }
 
 let currentUser = null;
@@ -81,7 +81,11 @@ async function deleteProject() {
   try {
     const bugsSnap = await getDocs(query(collection(db, "bugs"), where("projectId", "==", id)));
     for (const bugDoc of bugsSnap.docs) {
-      await deleteDoc(doc(db, "bugs", bugDoc.id));
+      try {
+        await deleteDoc(doc(db, "bugs", bugDoc.id));
+      } catch (e) {
+        console.warn("Skipping bug deletion (permissions):", e);
+      }
     }
     await deleteDoc(doc(db, "projects", id));
     location.href = "/home.html";
@@ -92,17 +96,28 @@ async function deleteProject() {
 
 function renderBug(b) {
   const statusColors = { Open:"tag", Resolved:"tag tag-neon", Invalid:"tag", Duplicate:"tag" };
+  const isOwner = currentUser && project && currentUser.uid === project.ownerId;
+  const showActions = isOwner && b.status === "Open";
+
   return `
     <div class="bug">
-      <div class="bug-head">
+      <div class="bug-head" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">
         <div style="flex:1;min-width:240px">
           <div class="row" style="gap:8px;margin-bottom:8px">
             <span class="tag">${esc(b.type||'Bug')}</span>
             <span class="${statusColors[b.status]||'tag'}">${esc(b.status||'Open')}</span>
             ${b.points ? `<span class="badge-points">+${b.points}</span>` : ""}
+            ${b.shoutout ? `<span class="badge-shoutout">📣 Shoutout</span>` : ""}
           </div>
           <div class="bug-title">${esc(b.title)}</div>
         </div>
+        ${showActions ? `
+          <div class="bug-actions" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+            <button class="btn btn-primary btn-sm action-resolve" data-id="${b.id}" data-hunter="${b.hunterId}" style="padding:4px 8px;font-size:12px">✅ Resolve (+10)</button>
+            <button class="btn btn-ghost btn-sm action-shoutout" data-id="${b.id}" data-hunter="${b.hunterId}" style="padding:4px 8px;font-size:12px">📣 Shoutout</button>
+            <button class="btn btn-danger btn-sm action-invalid" data-id="${b.id}" style="padding:4px 8px;font-size:12px">❌ Invalid</button>
+          </div>
+        ` : ""}
       </div>
       <p class="muted" style="line-height:1.6;font-size:14px">${esc(b.body)}</p>
       ${b.imageUrl ? `<img src="${esc(b.imageUrl)}" alt="bug screenshot" style="max-width:100%;border-radius:12px;margin:16px 0;max-height:400px;object-fit:cover">` : ""}
@@ -323,3 +338,44 @@ function esc(s) {
 }
 
 if (id) load();
+
+document.addEventListener("click", async (e) => {
+  const target = e.target;
+  if (!target.classList.contains("action-resolve") &&
+      !target.classList.contains("action-shoutout") &&
+      !target.classList.contains("action-invalid")) return;
+
+  const bugId = target.dataset.id;
+  const hunterId = target.dataset.hunter;
+  if (!bugId) return;
+
+  target.disabled = true;
+  const originalText = target.innerText;
+  target.innerText = "...";
+
+  try {
+    if (target.classList.contains("action-resolve")) {
+      const batch = writeBatch(db);
+      batch.update(doc(db, "bugs", bugId), { status: "Resolved", points: 10 });
+      batch.update(doc(db, "projects", id), { pointsAwarded: increment(10) });
+      if (hunterId) {
+        batch.update(doc(db, "users", hunterId), { points: increment(10), bugsResolved: increment(1) });
+      }
+      await batch.commit();
+    } else if (target.classList.contains("action-shoutout")) {
+      const batch = writeBatch(db);
+      batch.update(doc(db, "bugs", bugId), { shoutout: true });
+      if (hunterId) {
+        batch.update(doc(db, "users", hunterId), { shoutouts: increment(1) });
+      }
+      await batch.commit();
+    } else if (target.classList.contains("action-invalid")) {
+      await updateDoc(doc(db, "bugs", bugId), { status: "Invalid" });
+    }
+    load(); // Refresh the list
+  } catch (err) {
+    alert("Action failed: " + err.message);
+    target.disabled = false;
+    target.innerText = originalText;
+  }
+});

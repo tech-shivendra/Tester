@@ -29,7 +29,7 @@ renderHeader();
         createdAt: serverTimestamp()
       };
       const ref = await addDoc(collection(db, "projects"), data);
-      location.href = `project.html?id=${ref.id}`;
+      location.href = `project.html?id=${ref.id}#${ref.id}`;
     } catch (err) {
       msg.innerHTML = `<div class="error">${err.message}</div>`;
       btn.disabled = false; btn.innerHTML = "Publish Project";

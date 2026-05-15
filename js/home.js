@@ -21,7 +21,7 @@ async function loadProjects() {
       const p = d.data();
       const tags = (p.tags || []).slice(0, 3).map(t => `<span class="tag">${t}</span>`).join(" ");
       const card = document.createElement("a");
-      card.href = `project.html?id=${d.id}`;
+      card.href = `project.html?id=${d.id}#${d.id}`;
       card.className = "card";
       card.innerHTML = `
         <div class="project-cover" style="background:linear-gradient(135deg,${p.color1||'#222'},${p.color2||'#D9FF00'})"></div>
