@@ -79,15 +79,12 @@ function renderHead() {
 async function deleteProject() {
   if (!confirm(`Are you sure you want to delete "${project.title}"? This action cannot be undone.`)) return;
   try {
-    // Delete all bugs associated with this project
     const bugsSnap = await getDocs(query(collection(db, "bugs"), where("projectId", "==", id)));
     for (const bugDoc of bugsSnap.docs) {
       await deleteDoc(doc(db, "bugs", bugDoc.id));
     }
-    // Delete the project
     await deleteDoc(doc(db, "projects", id));
-    // Redirect to home
-    location.href = "home.html";
+    location.href = "/home.html";
   } catch (err) {
     alert("Error deleting project: " + err.message);
   }
@@ -121,8 +118,35 @@ function renderBug(b) {
   `;
 }
 
+function prettyStorageError(err) {
+  // Firebase Storage error codes
+  const code = err?.code || "";
+  const map = {
+    "storage/unauthorized":       "You don't have permission to upload files. Please sign in and try again.",
+    "storage/canceled":           "Upload was cancelled.",
+    "storage/unknown":            "An unknown error occurred during upload. Please try again.",
+    "storage/object-not-found":   "File not found in storage.",
+    "storage/bucket-not-found":   "Storage bucket not configured. Contact the site owner.",
+    "storage/project-not-found":  "Firebase project not found. Contact the site owner.",
+    "storage/quota-exceeded":     "Storage quota exceeded. Contact the site owner.",
+    "storage/unauthenticated":    "You must be signed in to upload files.",
+    "storage/retry-limit-exceeded":"Upload timed out. Check your connection and try again.",
+    "storage/invalid-checksum":   "File upload failed (checksum mismatch). Please try again.",
+    "storage/invalid-url":        "Invalid storage URL.",
+    "storage/no-default-bucket":  "Firebase Storage is not configured. Contact the site owner.",
+    "storage/cannot-slice-blob":  "Could not read the selected file. Please try a different image.",
+    "storage/server-file-wrong-size": "Upload size mismatch. Please try again.",
+  };
+  if (map[code]) return map[code];
+  // CORS / network failures surface as generic "storage/unknown" but sometimes as TypeError
+  if (err instanceof TypeError || code === "" || !code) {
+    return "Could not reach the upload server. This is usually a CORS or network issue — try submitting without a screenshot.";
+  }
+  return err.message || "Screenshot upload failed. Try submitting without a screenshot.";
+}
+
 function openModal() {
-  if (!currentUser) { location.href = "login.html"; return; }
+  if (!currentUser) { location.href = "/login.html"; return; }
   const m = document.getElementById("modal-root");
   m.innerHTML = `
     <div class="modal-overlay" id="overlay">
@@ -137,7 +161,7 @@ function openModal() {
             </select>
           </div>
           <div class="field"><label>Title</label><input class="input" id="b-title" required maxlength="120"/></div>
-          <div class="field"><label>Description & repro steps</label><textarea class="textarea" id="b-body" required></textarea></div>
+          <div class="field"><label>Description &amp; repro steps</label><textarea class="textarea" id="b-body" required></textarea></div>
           <div class="field"><label>Environment</label><input class="input" id="b-env" placeholder="Chrome 124 / macOS 14.4"/></div>
           <div class="field">
             <label>Attach screenshot (optional)</label>
@@ -159,24 +183,58 @@ function openModal() {
       </div>
     </div>
   `;
-  
+
   let selectedFile = null;
   let submitting = false;
-  const fileInput = document.getElementById("b-image");
-  const uploadBtn = document.getElementById("image-upload-btn");
-  const preview = document.getElementById("image-preview");
-  const previewImg = document.getElementById("preview-img");
-  const removeBtn = document.getElementById("remove-image-btn");
-  const cancelBtn = document.getElementById("cancel-bug");
-  const overlay = document.getElementById("overlay");
-  const bugMsg = document.getElementById("bug-msg");
-  const safeSetBugMsg = (html) => { if (bugMsg) bugMsg.innerHTML = html; };
-  
+
+  // --- Cache DOM refs immediately after innerHTML is set ---
+  const fileInput     = document.getElementById("b-image");
+  const uploadBtn     = document.getElementById("image-upload-btn");
+  const preview       = document.getElementById("image-preview");
+  const previewImg    = document.getElementById("preview-img");
+  const removeBtn     = document.getElementById("remove-image-btn");
+  const cancelBtn     = document.getElementById("cancel-bug");
+  const overlay       = document.getElementById("overlay");
+  const bugMsg        = document.getElementById("bug-msg");
+  const saveBtn       = document.getElementById("save-bug");
+
+  // Helper: always re-query from the live DOM to survive any partial re-renders
+  function getBugMsg()  { return document.getElementById("bug-msg"); }
+  function getSaveBtn() { return document.getElementById("save-bug"); }
+
+  function showBugError(text) {
+    const el = getBugMsg();
+    if (el) el.innerHTML = `<div class="error">${text}</div>`;
+  }
+
+  function clearBugMsg() {
+    const el = getBugMsg();
+    if (el) el.innerHTML = "";
+  }
+
+  function setBtnState(disabled, html) {
+    const btn = getSaveBtn();
+    if (btn) { btn.disabled = disabled; btn.innerHTML = html; }
+  }
+
   uploadBtn.addEventListener("click", (e) => { e.preventDefault(); fileInput.click(); });
-  
+
   fileInput.addEventListener("change", (e) => {
-    selectedFile = e.target.files[0];
+    selectedFile = e.target.files[0] || null;
     if (selectedFile) {
+      // Validate file type and size (5 MB cap)
+      if (!selectedFile.type.startsWith("image/")) {
+        showBugError("Please select an image file.");
+        selectedFile = null;
+        fileInput.value = "";
+        return;
+      }
+      if (selectedFile.size > 5 * 1024 * 1024) {
+        showBugError("Image must be smaller than 5 MB.");
+        selectedFile = null;
+        fileInput.value = "";
+        return;
+      }
       const reader = new FileReader();
       reader.onload = (evt) => {
         previewImg.src = evt.target.result;
@@ -185,70 +243,83 @@ function openModal() {
       reader.readAsDataURL(selectedFile);
     }
   });
-  
+
   removeBtn.addEventListener("click", (e) => {
     e.preventDefault();
     selectedFile = null;
     fileInput.value = "";
     preview.style.display = "none";
+    previewImg.src = "";
   });
-  
+
   cancelBtn.onclick = () => { if (!submitting) m.innerHTML = ""; };
-  overlay.onclick = (e) => { if (!submitting && e.target.id === "overlay") m.innerHTML = ""; };
-  
+  overlay.onclick   = (e) => { if (!submitting && e.target.id === "overlay") m.innerHTML = ""; };
+
   document.getElementById("bug-form").onsubmit = async (e) => {
     e.preventDefault();
-    const btn = document.getElementById("save-bug");
-    const safeSetBtnState = (disabled, html) => { if (btn) { btn.disabled = disabled; btn.innerHTML = html; } };
-    safeSetBtnState(true, '<div class="loader"></div>');
+    clearBugMsg();
+    setBtnState(true, '<div class="loader"></div>');
     submitting = true;
+
     try {
-      safeSetBugMsg("");
+      const title = document.getElementById("b-title").value.trim();
+      const body  = document.getElementById("b-body").value.trim();
+      if (!title) throw new Error("Title is required.");
+      if (!body)  throw new Error("Description is required.");
 
       let imageUrl = null;
-      
-      // Upload image if selected
+
+      // Upload screenshot — isolated try/catch so we can give a clear error
       if (selectedFile) {
-        const storageRef = ref(storage, `bugs/${Date.now()}_${selectedFile.name}`);
-        await uploadBytes(storageRef, selectedFile);
-        imageUrl = await getDownloadURL(storageRef);
+        try {
+          const storageRef = ref(storage, `bugs/${Date.now()}_${selectedFile.name}`);
+          const snapshot   = await uploadBytes(storageRef, selectedFile);
+          imageUrl         = await getDownloadURL(snapshot.ref);
+        } catch (uploadErr) {
+          console.error("Screenshot upload failed:", uploadErr);
+          // Re-enable button and show a clear, actionable message; don't submit without the image
+          setBtnState(false, "Submit Report");
+          submitting = false;
+          showBugError(
+            `<strong>Screenshot upload failed.</strong> ${prettyStorageError(uploadErr)}<br>
+             <span style="font-size:12px;opacity:.8">You can remove the screenshot and submit without it.</span>`
+          );
+          return; // stop — do not save the bug without the intended screenshot
+        }
       }
 
-      const title = document.getElementById("b-title").value.trim();
-      const body = document.getElementById("b-body").value.trim();
-      if (!title) throw new Error("Title is required.");
-      if (!body) throw new Error("Description is required.");
-      
       const bugData = {
-        projectId: id,
-        hunterId: currentUser.uid,
-        hunterName: currentUser.displayName || currentUser.email,
-        type: document.getElementById("b-type").value,
+        projectId:   id,
+        hunterId:    currentUser.uid,
+        hunterName:  currentUser.displayName || currentUser.email,
+        type:        document.getElementById("b-type").value,
         title,
         body,
         environment: document.getElementById("b-env").value.trim(),
-        status: "Open",
-        createdAt: serverTimestamp()
+        status:      "Open",
+        createdAt:   serverTimestamp(),
       };
-      
-      if (imageUrl) {
-        bugData.imageUrl = imageUrl;
-      }
-      
+      if (imageUrl) bugData.imageUrl = imageUrl;
+
       await addDoc(collection(db, "bugs"), bugData);
       await updateDoc(doc(db, "projects", id), { bugsFound: increment(1) });
-      m.innerHTML = "";
-      load();
+
+      m.innerHTML = ""; // close modal on success
+      load();           // refresh bug feed
+
     } catch (err) {
-      const message = (err && err.message) ? err.message : String(err);
-      safeSetBugMsg(`<div class="error">${message}</div>`);
-      safeSetBtnState(false, "Submit Report");
+      console.error("Bug submission error:", err);
+      const message = err?.message || String(err) || "Something went wrong.";
+      setBtnState(false, "Submit Report");
+      showBugError(message);
     } finally {
       submitting = false;
     }
   };
 }
 
-function esc(s){return String(s||'').replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function esc(s) {
+  return String(s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
 
 if (id) load();
