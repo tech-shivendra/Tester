@@ -1,0 +1,34 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Lexend:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="css/styles.css"><title>Post a Project — DevCheck</title></head>
+<body>
+<header class="header" id="site-header"></header>
+<main class="container section" style="max-width:720px">
+  <div class="eyebrow">New Submission</div>
+  <h1 class="font-display" style="font-size:40px;margin-top:12px">Post a Project</h1>
+  <p class="muted" style="margin-top:12px">Give hunters everything they need: a clear scope, a way to access it, and what kind of bugs you care most about.</p>
+  <div id="msg" style="margin-top:24px"></div>
+  <form id="submit-form" class="card card-pad-lg" style="margin-top:32px">
+    <div class="field">
+      <label>Project title *</label>
+      <input class="input" id="title" required maxlength="80" placeholder="e.g. Lumen OS"/>
+    </div>
+    <div class="field">
+      <label>Description *</label>
+      <textarea class="textarea" id="description" required maxlength="500" placeholder="What does it do? What should hunters focus on?"></textarea>
+    </div>
+    <div class="field">
+      <label>Tags (comma separated)</label>
+      <input class="input" id="tags" placeholder="React, TypeScript, Vite"/>
+    </div>
+    <div class="field">
+      <label>Live URL</label>
+      <input class="input" id="liveUrl" type="url" placeholder="https://..."/>
+    </div>
+    <div class="field">
+      <label>Repository URL</label>
+      <input class="input" id="repoUrl" type="url" placeholder="https://github.com/..."/>
+    </div>
+    <button type="submit" class="btn btn-primary btn-lg btn-block" id="submit-btn">Publish Project</button>
+  </form>
+</main>
+<script type="module" src="js/submit.js"></script>
+</body></html>
