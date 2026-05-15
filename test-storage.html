@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+import { getStorage, ref, uploadBytes } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js";
+
+const config1 = {
+  projectId: "devcheck-90ae1",
+  storageBucket: "devcheck-90ae1.firebasestorage.app",
+};
+const config2 = {
+  projectId: "devcheck-90ae1",
+  storageBucket: "devcheck-90ae1.appspot.com",
+};
+
+async function testBucket(config) {
+  try {
+    const app = initializeApp(config, config.storageBucket);
+    const storage = getStorage(app);
+    const storageRef = ref(storage, "test.txt");
+    const blob = new Blob(["test"], { type: "text/plain" });
+    await uploadBytes(storageRef, blob);
+    console.log("SUCCESS:", config.storageBucket);
+  } catch (e) {
+    console.log("FAILED:", config.storageBucket, e.message);
+  }
+}
+
+window.onload = async () => {
+  await testBucket(config1);
+  await testBucket(config2);
+};
+</script>
+</body>
+</html>
