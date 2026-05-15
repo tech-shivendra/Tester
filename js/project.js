@@ -317,7 +317,16 @@ function openModal() {
       if (imageUrl) bugData.imageUrl = imageUrl;
 
       await addDoc(collection(db, "bugs"), bugData);
-      await updateDoc(doc(db, "projects", id), { bugsFound: increment(1) });
+      try {
+        const qs = await getDocs(query(collection(db, "bugs"), where("projectId", "==", id), where("hunterId", "==", currentUser.uid)));
+        const updates = { bugsFound: increment(1) };
+        if (qs.empty) {
+          updates.testers = increment(1);
+        }
+        await updateDoc(doc(db, "projects", id), updates);
+      } catch (e) {
+        console.warn("Could not update project stats (permissions):", e);
+      }
 
       m.innerHTML = ""; // close modal on success
       load();           // refresh bug feed
@@ -355,20 +364,16 @@ document.addEventListener("click", async (e) => {
 
   try {
     if (target.classList.contains("action-resolve")) {
-      const batch = writeBatch(db);
-      batch.update(doc(db, "bugs", bugId), { status: "Resolved", points: 10 });
-      batch.update(doc(db, "projects", id), { pointsAwarded: increment(10) });
+      await updateDoc(doc(db, "bugs", bugId), { status: "Resolved", points: 10 });
+      try { await updateDoc(doc(db, "projects", id), { pointsAwarded: increment(10) }); } catch(e) {}
       if (hunterId) {
-        batch.update(doc(db, "users", hunterId), { points: increment(10), bugsResolved: increment(1) });
+        try { await updateDoc(doc(db, "users", hunterId), { points: increment(10), bugsResolved: increment(1) }); } catch(e) {}
       }
-      await batch.commit();
     } else if (target.classList.contains("action-shoutout")) {
-      const batch = writeBatch(db);
-      batch.update(doc(db, "bugs", bugId), { shoutout: true });
+      await updateDoc(doc(db, "bugs", bugId), { shoutout: true });
       if (hunterId) {
-        batch.update(doc(db, "users", hunterId), { shoutouts: increment(1) });
+        try { await updateDoc(doc(db, "users", hunterId), { shoutouts: increment(1) }); } catch(e) {}
       }
-      await batch.commit();
     } else if (target.classList.contains("action-invalid")) {
       await updateDoc(doc(db, "bugs", bugId), { status: "Invalid" });
     }
