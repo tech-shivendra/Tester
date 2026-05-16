@@ -32,7 +32,7 @@ jobs:
       - name: Generate env.js
         run: |
           node build.js
-          sed -i -e '/js\/env.js/d' .gitignore || true
+          rm -f .gitignore
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
