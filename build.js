@@ -6,5 +6,5 @@ const envContent = `export const ENV = {
 };
 `;
 
-fs.writeFileSync('./js/env.js', envContent);
-console.log('Successfully generated js/env.js');
+fs.writeFileSync('./js/app-config.js', envContent);
+console.log('Successfully generated js/app-config.js');

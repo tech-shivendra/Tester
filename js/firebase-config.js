@@ -11,7 +11,7 @@ import {
 import {
   getStorage, ref, uploadBytes, getDownloadURL
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js";
-import { ENV } from "./env.js";
+import { ENV } from "./app-config.js";
 
 const firebaseConfig = {
   apiKey: ENV.FIREBASE_API_KEY,

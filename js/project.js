@@ -4,7 +4,7 @@ import {
   storage, ref, uploadBytes, getDownloadURL
 } from "./firebase-config.js";
 import { renderHeader, initials, timeAgo } from "./shared.js";
-import { ENV } from "./env.js";
+import { ENV } from "./app-config.js";
 
 renderHeader();
 
