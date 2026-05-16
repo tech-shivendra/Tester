@@ -173,7 +173,7 @@ img{max-width:100%;display:block}
 @media(max-width:640px) {
   .header-inner { padding: 0 16px; gap: 12px; }
   .logo { font-size: 16px; }
-  .nav { gap: 4px; }
+  .nav { gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
   .nav a { padding: 6px 10px; font-size: 13px; }
   
   .modal-overlay { padding: 16px; }

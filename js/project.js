@@ -101,7 +101,7 @@ function renderBug(b) {
 
   return `
     <div class="bug">
-      <div class="bug-head" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">
+      <div class="bug-head" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
         <div style="flex:1;min-width:240px">
           <div class="row" style="gap:8px;margin-bottom:8px">
             <span class="tag">${esc(b.type||'Bug')}</span>
@@ -160,6 +160,41 @@ function prettyStorageError(err) {
   return err.message || "Screenshot upload failed. Try submitting without a screenshot.";
 }
 
+async function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const canvas = document.createElement("canvas");
+      const MAX_WIDTH = 800;
+      const MAX_HEIGHT = 800;
+      let width = img.width;
+      let height = img.height;
+      if (width > height) {
+        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+      } else {
+        if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+      }
+      canvas.width = Math.floor(width);
+      canvas.height = Math.floor(height);
+      const ctx = canvas.getContext("2d");
+      
+      // If it's a PNG, fill with white so transparent pixels don't turn black in JPEG
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      
+      resolve(canvas.toDataURL("image/jpeg", 0.5));
+    };
+    img.onerror = (error) => {
+      URL.revokeObjectURL(objectUrl);
+      reject(error);
+    };
+    img.src = objectUrl;
+  });
+}
+
 function openModal() {
   if (!currentUser) { location.href = "login.html"; return; }
   const m = document.getElementById("modal-root");
@@ -176,7 +211,13 @@ function openModal() {
             </select>
           </div>
           <div class="field"><label>Title</label><input class="input" id="b-title" required maxlength="120"/></div>
-          <div class="field"><label>Description &amp; repro steps</label><textarea class="textarea" id="b-body" required></textarea></div>
+          <div class="field">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <label style="margin:0">Description &amp; repro steps</label>
+              <button type="button" class="btn btn-ghost btn-sm" id="analyse-ai-btn" style="padding:4px 8px;font-size:12px">✨ Analyse with AI</button>
+            </div>
+            <textarea class="textarea" id="b-body" required></textarea>
+          </div>
           <div class="field"><label>Environment</label><input class="input" id="b-env" placeholder="Chrome 124 / macOS 14.4"/></div>
           <div class="field">
             <label>Attach screenshot (optional)</label>
@@ -212,6 +253,8 @@ function openModal() {
   const overlay       = document.getElementById("overlay");
   const bugMsg        = document.getElementById("bug-msg");
   const saveBtn       = document.getElementById("save-bug");
+  const analyseBtn    = document.getElementById("analyse-ai-btn");
+  const bBody         = document.getElementById("b-body");
 
   // Helper: always re-query from the live DOM to survive any partial re-renders
   function getBugMsg()  { return document.getElementById("bug-msg"); }
@@ -267,6 +310,51 @@ function openModal() {
     previewImg.src = "";
   });
 
+  if (analyseBtn) {
+    analyseBtn.addEventListener("click", async () => {
+      const apiKey = "AIzaSyCstwRj-4Ha9cATs2dCqKksoUNsEQV4AN0";
+      
+      const originalText = analyseBtn.innerText;
+      analyseBtn.innerText = "Analyzing...";
+      analyseBtn.disabled = true;
+      
+      try {
+        const targetUrl = project.liveUrl || project.repoUrl || "";
+        if (!targetUrl) {
+          throw new Error("This project does not have a Live URL or Repository URL to analyze.");
+        }
+        
+        const promptText = `Analyze the following URL/Repository and identify potential functional and visual errors: ${targetUrl}. Provide a brief report in markdown. Keep it concise.`;
+        
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: promptText }] }]
+          })
+        });
+        
+        if (!response.ok) {
+           if (response.status === 400) {
+             throw new Error("Invalid API Key.");
+           }
+           throw new Error("Failed to generate analysis.");
+        }
+        
+        const data = await response.json();
+        const aiReport = data.candidates?.[0]?.content?.parts?.[0]?.text || "No report generated.";
+        
+        bBody.value = bBody.value + (bBody.value ? "\n\n" : "") + "### AI Analysis Report\n" + aiReport;
+        
+      } catch (err) {
+        alert("AI Analysis error: " + err.message);
+      } finally {
+        analyseBtn.innerText = originalText;
+        analyseBtn.disabled = false;
+      }
+    });
+  }
+
   cancelBtn.onclick = () => { if (!submitting) m.innerHTML = ""; };
   overlay.onclick   = (e) => { if (!submitting && e.target.id === "overlay") m.innerHTML = ""; };
 
@@ -284,20 +372,16 @@ function openModal() {
 
       let imageUrl = null;
 
-      // Upload screenshot — isolated try/catch so we can give a clear error
+      // Process screenshot using client-side compression to bypass CORS issues
       if (selectedFile) {
         try {
-          const storageRef = ref(storage, `bugs/${Date.now()}_${selectedFile.name}`);
-          const snapshot   = await uploadBytes(storageRef, selectedFile);
-          imageUrl         = await getDownloadURL(snapshot.ref);
+          imageUrl = await compressImage(selectedFile);
         } catch (uploadErr) {
-          console.error("Screenshot upload failed:", uploadErr);
-          // Re-enable button and show a clear, actionable message; don't submit without the image
+          console.error("Screenshot compression failed:", uploadErr);
           setBtnState(false, "Submit Report");
           submitting = false;
           showBugError(
-            `<strong>Screenshot upload failed.</strong> ${prettyStorageError(uploadErr)}<br>
-             <span style="font-size:12px;opacity:.8">You can remove the screenshot and submit without it.</span>`
+            `<strong>Screenshot processing failed.</strong> Please try a different image or submit without it.`
           );
           return; // stop — do not save the bug without the intended screenshot
         }
