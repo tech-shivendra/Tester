@@ -1,5 +1,4 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
-import { ENV } from "./env.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword,
   createUserWithEmailAndPassword, signOut, GoogleAuthProvider,
@@ -14,7 +13,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js";
 
 const firebaseConfig = {
-  apiKey: ENV.FIREBASE_API_KEY,
+  apiKey: "AIzaSyA0e2zJkUeXDmw8MiEzlnO0sozV0dItCBA",
   authDomain: "devcheck-90ae1.firebaseapp.com",
   projectId: "devcheck-90ae1",
   storageBucket: "devcheck-90ae1.firebasestorage.app",
