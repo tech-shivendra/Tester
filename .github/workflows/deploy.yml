@@ -30,7 +30,9 @@ jobs:
         with:
           node-version: "20"
       - name: Generate env.js
-        run: node build.js
+        run: |
+          node build.js
+          sed -i -e '/js\/env.js/d' .gitignore || true
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
