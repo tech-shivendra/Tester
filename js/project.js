@@ -336,10 +336,17 @@ function openModal() {
         });
         
         if (!response.ok) {
-           if (response.status === 400) {
-             throw new Error("Invalid API Key.");
+           let errMsg = "Failed to generate analysis.";
+           try {
+             const errorData = await response.json();
+             if (errorData.error && errorData.error.message) {
+               errMsg = errorData.error.message;
+             }
+           } catch (e) {}
+           if (response.status === 400 && errMsg === "Failed to generate analysis.") {
+             errMsg = "Invalid API Key.";
            }
-           throw new Error("Failed to generate analysis.");
+           throw new Error(errMsg);
         }
         
         const data = await response.json();
