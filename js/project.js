@@ -325,15 +325,37 @@ function openModal() {
           throw new Error("This project does not have a Live URL or Repository URL to analyze.");
         }
         
+        window.aiAnalysisCache = window.aiAnalysisCache || {};
+        if (window.aiAnalysisCache[targetUrl]) {
+          bBody.value = bBody.value + (bBody.value ? "\n\n" : "") + "### AI Analysis Report\n" + window.aiAnalysisCache[targetUrl];
+          return;
+        }
+        
         const promptText = `Analyze the following URL/Repository and identify potential functional and visual errors: ${targetUrl}. Provide a brief report in markdown. Keep it concise.`;
         
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: promptText }] }]
-          })
-        });
+        let response;
+        let retries = 3;
+        let delay = 3000;
+        
+        while (retries > 0) {
+          response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: promptText }] }]
+            })
+          });
+          
+          if (response.status === 429 && retries > 1) {
+            retries--;
+            analyseBtn.innerText = `Rate limit, retrying...`;
+            await new Promise(r => setTimeout(r, delay));
+            delay *= 1.5; // Exponential backoff
+            analyseBtn.innerText = "Analyzing...";
+          } else {
+            break;
+          }
+        }
         
         if (!response.ok) {
            let errMsg = "Failed to generate analysis.";
@@ -343,14 +365,20 @@ function openModal() {
                errMsg = errorData.error.message;
              }
            } catch (e) {}
+           
            if (response.status === 400 && errMsg === "Failed to generate analysis.") {
              errMsg = "Invalid API Key.";
+           } else if (response.status === 429) {
+             errMsg = "Too many requests to the AI service. Please wait a few seconds and try again.";
            }
+           
            throw new Error(errMsg);
         }
         
         const data = await response.json();
         const aiReport = data.candidates?.[0]?.content?.parts?.[0]?.text || "No report generated.";
+        
+        window.aiAnalysisCache[targetUrl] = aiReport;
         
         bBody.value = bBody.value + (bBody.value ? "\n\n" : "") + "### AI Analysis Report\n" + aiReport;
         
