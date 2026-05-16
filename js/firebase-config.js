@@ -11,9 +11,10 @@ import {
 import {
   getStorage, ref, uploadBytes, getDownloadURL
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js";
+import { ENV } from "./env.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA0e2zJkUeXDmw8MiEzlnO0sozV0dItCBA",
+  apiKey: ENV.FIREBASE_API_KEY,
   authDomain: "devcheck-90ae1.firebaseapp.com",
   projectId: "devcheck-90ae1",
   storageBucket: "devcheck-90ae1.firebasestorage.app",
