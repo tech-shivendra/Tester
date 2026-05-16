@@ -4,6 +4,7 @@ import {
   storage, ref, uploadBytes, getDownloadURL
 } from "./firebase-config.js";
 import { renderHeader, initials, timeAgo } from "./shared.js";
+import { ENV } from "./env.js";
 
 renderHeader();
 
@@ -312,7 +313,7 @@ function openModal() {
 
   if (analyseBtn) {
     analyseBtn.addEventListener("click", async () => {
-      const apiKey = "AIzaSyCstwRj-4Ha9cATs2dCqKksoUNsEQV4AN0";
+      const apiKey = ENV.GEMINI_API_KEY;
       
       const originalText = analyseBtn.innerText;
       analyseBtn.innerText = "Analyzing...";
